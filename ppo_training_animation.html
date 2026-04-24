@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>verl PPO Training Flow Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2em;
+            color: #00d9ff;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+        }
+
+        /* 控制面板 */
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        .btn-play {
+            background: linear-gradient(45deg, #00d9ff, #00ff88);
+            color: #1a1a2e;
+        }
+
+        .btn-pause {
+            background: linear-gradient(45deg, #ff6b6b, #ffa500);
+            color: #fff;
+        }
+
+        .btn-reset {
+            background: #444;
+            color: #fff;
+        }
+
+        .btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 5px 20px rgba(0, 217, 255, 0.3);
+        }
+
+        /* 状态显示 */
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+        }
+
+        .status-item {
+            text-align: center;
+        }
+
+        .status-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff88;
+        }
+
+        .status-label {
+            font-size: 12px;
+            color: #888;
+        }
+
+        /* 主流程图 */
+        .flow-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            position: relative;
+        }
+
+        /* 流程步骤 */
+        .step {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            border: 2px solid transparent;
+            transition: all 0.5s;
+            position: relative;
+            opacity: 0.5;
+        }
+
+        .step.active {
+            opacity: 1;
+            border-color: #00d9ff;
+            background: rgba(0, 217, 255, 0.1);
+            transform: scale(1.02);
+        }
+
+        .step.completed {
+            opacity: 1;
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+
+        .step-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-right: 20px;
+            position: relative;
+        }
+
+        .step-1 .step-icon { background: linear-gradient(45deg, #667eea, #764ba2); }
+        .step-2 .step-icon { background: linear-gradient(45deg, #f093fb, #f5576c); }
+        .step-3 .step-icon { background: linear-gradient(45deg, #4facfe, #00f2fe); }
+        .step-4 .step-icon { background: linear-gradient(45deg, #43e97b, #38f9d7); }
+        .step-5 .step-icon { background: linear-gradient(45deg, #fa709a, #fee140); }
+        .step-6 .step-icon { background: linear-gradient(45deg, #a8edea, #fed6e3); }
+
+        .step-number {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #fff;
+            color: #1a1a2e;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .step-desc {
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        /* 详细信息面板 */
+        .detail-panel {
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+            min-height: 150px;
+            transition: all 0.3s;
+        }
+
+        .detail-title {
+            font-size: 16px;
+            color: #00d9ff;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #00d9ff;
+            padding-bottom: 10px;
+        }
+
+        .detail-content {
+            font-size: 14px;
+            line-height: 1.8;
+        }
+
+        /* 数据流动画 */
+        .data-flow {
+            position: relative;
+            height: 60px;
+            margin: 20px 0;
+        }
+
+        .data-packet {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(45deg, #00d9ff, #00ff88);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            opacity: 0;
+            animation: movePacket 2s ease-in-out;
+        }
+
+        @keyframes movePacket {
+            0% { left: 0; opacity: 1; }
+            100% { left: calc(100% - 30px); opacity: 0.5; }
+        }
+
+        /* Worker架构图 */
+        .worker-diagram {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+
+        .worker-box {
+            padding: 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            min-width: 150px;
+            text-align: center;
+            transition: all 0.5s;
+            border: 2px solid transparent;
+        }
+
+        .worker-box.active {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.2);
+            transform: translateY(-5px);
+        }
+
+        .worker-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #00d9ff;
+            margin-bottom: 10px;
+        }
+
+        .worker-desc {
+            font-size: 12px;
+            color: #888;
+        }
+
+        /* 公式展示 */
+        .formula-box {
+            background: rgba(0, 217, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            color: #00ff88;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        /* 进度条 */
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            width: 0%;
+            transition: width 0.5s;
+            border-radius: 5px;
+        }
+
+        /* 连接箭头 */
+        .arrow {
+            text-align: center;
+            font-size: 24px;
+            color: #00d9ff;
+            animation: bounce 1s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        /* 代码示例 */
+        .code-block {
+            background: rgba(0,0,0,0.5);
+            padding: 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .code-highlight {
+            color: #00ff88;
+        }
+
+        /* 循环指示 */
+        .loop-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .loop-arrow {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #00d9ff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        .loop-text {
+            text-align: center;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .worker-diagram {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .step {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .step-icon {
+                margin-right: 0;
+                margin-bottom: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>verl PPO Training Flow</h1>
+        <p class="subtitle">Reinforcement Learning from Human Feedback 训练流程动画演示</p>
+
+        <!-- 控制按钮 -->
+        <div class="controls">
+            <button class="btn btn-play" onclick="startAnimation()">▶ 开始</button>
+            <button class="btn btn-pause" onclick="pauseAnimation()">⏸ 暂停</button>
+            <button class="btn btn-reset" onclick="resetAnimation()">↺ 重置</button>
+            <button class="btn btn-reset" onclick="toggleSpeed()">⚡ 速度: <span id="speedLabel">正常</span></button>
+        </div>
+
+        <!-- 状态显示 -->
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-value" id="epochValue">0</div>
+                <div class="status-label">Epoch</div>
+            </div>
+            <div class="status-item">
+                <div class="status-value" id="stepValue">0</div>
+                <div class="status-label">当前步骤</div>
+            </div>
+            <div class="status-item">
+                <div class="status-value" id="rewardValue">-</div>
+                <div class="status-label">平均Reward</div>
+            </div>
+            <div class="status-item">
+                <div class="status-value" id="lossValue">-</div>
+                <div class="status-label">Policy Loss</div>
+            </div>
+        </div>
+
+        <!-- 进度条 -->
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <!-- Worker架构 -->
+        <div class="worker-diagram">
+            <div class="worker-box" id="worker-actor">
+                <div class="worker-title">🤖 ActorRolloutWorker</div>
+                <div class="worker-desc">生成response序列</div>
+            </div>
+            <div class="worker-box" id="worker-ref">
+                <div class="worker-title">📚 RefPolicyWorker</div>
+                <div class="worker-desc">计算参考策略log_prob</div>
+            </div>
+            <div class="worker-box" id="worker-reward">
+                <div class="worker-title">🎁 RewardModelWorker</div>
+                <div class="worker-desc">计算奖励值</div>
+            </div>
+            <div class="worker-box" id="worker-critic">
+                <div class="worker-title">📊 CriticWorker</div>
+                <div class="worker-desc">估计价值函数</div>
+            </div>
+        </div>
+
+        <!-- 主流程 -->
+        <div class="flow-container">
+            <!-- Step 1 -->
+            <div class="step step-1" id="step-1">
+                <div class="step-icon">
+                    <span>📝</span>
+                    <div class="step-number">1</div>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">Generate Rollout (生成序列)</div>
+                    <div class="step-desc">Actor模型接收prompt，生成response序列</div>
+                </div>
+            </div>
+
+            <div class="arrow">↓</div>
+
+            <!-- Step 2 -->
+            <div class="step step-2" id="step-2">
+                <div class="step-icon">
+                    <span>🎁</span>
+                    <div class="step-number">2</div>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">Compute Reward (计算奖励)</div>
+                    <div class="step-desc">Reward Model 或规则函数计算奖励，可选KL惩罚</div>
+                </div>
+            </div>
+
+            <div class="arrow">↓</div>
+
+            <!-- Step 3 -->
+            <div class="step step-3" id="step-3">
+                <div class="step-icon">
+                    <span>📈</span>
+                    <div class="step-number">3</div>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">Compute Advantage (计算优势)</div>
+                    <div class="step-desc">使用GAE或GRPO算法计算优势函数估计</div>
+                </div>
+            </div>
+
+            <div class="arrow">↓</div>
+
+            <!-- Step 4 -->
+            <div class="step step-4" id="step-4">
+                <div class="step-icon">
+                    <span>🔄</span>
+                    <div class="step-number">4</div>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">Update Policy (更新策略)</div>
+                    <div class="step-desc">PPO clipped objective，多轮迭代更新Actor</div>
+                </div>
+            </div>
+
+            <div class="arrow">↓</div>
+
+            <!-- Step 5 -->
+            <div class="step step-5" id="step-5">
+                <div class="step-icon">
+                    <span>📊</span>
+                    <div class="step-number">5</div>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">Update Critic (更新价值网络)</div>
+                    <div class="step-desc">最小化价值估计误差 MSE Loss</div>
+                </div>
+            </div>
+
+            <div class="arrow">↓</div>
+
+            <!-- Step 6 -->
+            <div class="step step-6" id="step-6">
+                <div class="step-icon">
+                    <span>💾</span>
+                    <div class="step-number">6</div>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">Save Checkpoint (保存检查点)</div>
+                    <div class="step-desc">保存模型参数，支持断点续训</div>
+                </div>
+            </div>
+
+            <!-- 循环箭头 -->
+            <div class="arrow" style="color: #00ff88; font-size: 30px;">
+                ↺ 下一 Epoch
+            </div>
+        </div>
+
+        <!-- 详细信息面板 -->
+        <div class="detail-panel" id="detailPanel">
+            <div class="detail-title" id="detailTitle">PPO Training Details</div>
+            <div class="detail-content" id="detailContent">
+                点击"开始"按钮查看PPO训练流程的动画演示。
+                <br><br>
+                <b>核心公式:</b>
+                <div class="formula-box">
+                    L(θ) = min(r(θ)·A, clip(r(θ), 1-ε, 1+ε)·A)
+                </div>
+                其中 r(θ) = π_new / π_old，A 为优势函数，ε 为clip范围
+            </div>
+        </div>
+
+        <!-- 数据流可视化 -->
+        <div class="data-flow" id="dataFlow" style="background: rgba(255,255,255,0.05); border-radius: 10px;">
+            <div style="padding: 20px; text-align: center; color: #888;">
+                DataProto 数据流转: prompt → sequences → reward → advantage → loss
+            </div>
+        </div>
+    </div>
+
+    <!-- 循环指示器 -->
+    <div class="loop-indicator">
+        <div class="loop-arrow" id="loopArrow"></div>
+        <div class="loop-text">Training Loop</div>
+    </div>
+
+    <script>
+        // 状态变量
+        let isRunning = false;
+        let currentStep = 0;
+        let currentEpoch = 0;
+        let animationSpeed = 1;
+        let intervalId = null;
+        const totalSteps = 6;
+        const maxEpochs = 10;
+
+        // 详细内容定义
+        const stepDetails = {
+            1: {
+                title: "Step 1: Generate Rollout",
+                content: `
+                    <b>Worker:</b> ActorRolloutRefWorker<br>
+                    <b>输入:</b> prompt (来自DataProto)<br>
+                    <b>输出:</b> sequences + log_probs<br><br>
+                    <b>过程:</b>
+                    <ul>
+                        <li>加载Actor模型 (FSDP/Megatron)</li>
+                        <li>使用vLLM/SGLang/HF进行推理</li>
+                        <li>生成response序列</li>
+                        <li>记录log_probs用于后续PPO更新</li>
+                    </ul>
+                    <div class="code-block">
+                        <span class="code-highlight">@register</span><br>
+                        def generate_sequences(self, data: DataProto):<br>
+                        &nbsp;&nbsp;sequences = self.actor.generate(prompts)<br>
+                        &nbsp;&nbsp;data.batch["sequences"] = sequences<br>
+                        &nbsp;&nbsp;return data
+                    </div>
+                `,
+                workers: ["worker-actor", "worker-ref"]
+            },
+            2: {
+                title: "Step 2: Compute Reward",
+                content: `
+                    <b>Worker:</b> RewardModelWorker / RewardFunction<br>
+                    <b>输入:</b> prompt + response<br>
+                    <b>输出:</b> reward scores<br><br>
+                    <b>奖励类型:</b>
+                    <ul>
+                        <li>Model-based: 使用Reward Model推理</li>
+                        <li>Rule-based: 自定义评分规则</li>
+                        <li>KL Penalty: 参考策略与当前策略KL散度</li>
+                    </ul>
+                    <div class="formula-box">
+                        KL Penalty: r = r_base - β · KL(π || π_ref)
+                    </div>
+                    <div class="code-block">
+                        reward = self.reward_model(prompt, response)<br>
+                        if use_kl_penalty:<br>
+                        &nbsp;&nbsp;kl = compute_kl(log_prob, ref_log_prob)<br>
+                        &nbsp;&nbsp;reward -= kl_coef * kl
+                    </div>
+                `,
+                workers: ["worker-reward", "worker-ref"]
+            },
+            3: {
+                title: "Step 3: Compute Advantage",
+                content: `
+                    <b>模块:</b> core_algos.py<br>
+                    <b>输入:</b> rewards, values, gamma, lambda<br>
+                    <b>输出:</b> advantage estimates<br><br>
+                    <b>方法:</b>
+                    <ul>
+                        <li><b>GAE:</b> A = Σ(γλ)^t · δ_t</li>
+                        <li><b>GRPO:</b> Group内标准化</li>
+                        <li><b>REINFORCE++:</b> 基线减去</li>
+                    </ul>
+                    <div class="formula-box">
+                        δ_t = r_t + γ·V(s_{t+1}) - V(s_t)<br>
+                        A_t = Σ_{l=0}^∞ (γλ)^l · δ_{t+l}
+                    </div>
+                    <div class="code-block">
+                        <span class="code-highlight">from verl.trainer.ppo.core_algos</span><br>
+                        advantages = compute_gae_advantage(<br>
+                        &nbsp;&nbsp;values, rewards, gamma, lam<br>
+                        )
+                    </div>
+                `,
+                workers: ["worker-critic"]
+            },
+            4: {
+                title: "Step 4: Update Policy (PPO)",
+                content: `
+                    <b>Worker:</b> ActorRolloutRefWorker<br>
+                    <b>输入:</b> old_log_probs, advantages, clip_ratio<br>
+                    <b>输出:</b> policy_loss, updated_model<br><br>
+                    <b>PPO Clipped Objective:</b>
+                    <div class="formula-box">
+                        L = min(r(θ)·A, clip(r(θ), 1-ε, 1+ε)·A)<br>
+                        r(θ) = exp(log_prob - old_log_prob)
+                    </div>
+                    <b>迭代次数:</b> ppo_epochs (通常4次)<br><br>
+                    <div class="code-block">
+                        ratio = exp(log_prob - old_log_prob)<br>
+                        clipped = clip(ratio, 1-ε, 1+ε)<br>
+                        loss = -min(ratio*A, clipped*A).mean()
+                    </div>
+                `,
+                workers: ["worker-actor"]
+            },
+            5: {
+                title: "Step 5: Update Critic",
+                content: `
+                    <b>Worker:</b> CriticWorker<br>
+                    <b>输入:</b> values, returns<br>
+                    <b>输出:</b> value_loss, updated_critic<br><br>
+                    <b>目标:</b> 最小化价值估计误差<br>
+                    <div class="formula-box">
+                        L_critic = MSE(V(s), returns)<br>
+                        returns = rewards + γ·V(s_{next})
+                    </div>
+                    <b>优化:</b> 梯度下降更新Critic参数<br><br>
+                    <div class="code-block">
+                        value_loss = (values - returns).pow(2).mean()<br>
+                        self.critic_optimizer.step()
+                    </div>
+                `,
+                workers: ["worker-critic"]
+            },
+            6: {
+                title: "Step 6: Save Checkpoint",
+                content: `
+                    <b>模块:</b> checkpoint_manager<br>
+                    <b>保存内容:</b>
+                    <ul>
+                        <li>Actor模型参数</li>
+                        <li>Critic模型参数</li>
+                        <li>优化器状态</li>
+                        <li>训练步数/Epoch</li>
+                    </ul>
+                    <b>检查点策略:</b>
+                    <ul>
+                        <li>定期保存 (每N步)</li>
+                        <li>最佳模型保存</li>
+                        <li>支持断点续训</li>
+                    </ul>
+                    <div class="code-block">
+                        checkpoint_manager.save(<br>
+                        &nbsp;&nbsp;actor_state, critic_state,<br>
+                        &nbsp;&nbsp;optimizer_state, step<br>
+                        )
+                    </div>
+                `,
+                workers: []
+            }
+        };
+
+        // 启动动画
+        function startAnimation() {
+            if (isRunning) return;
+            isRunning = true;
+
+            const baseDelay = 2000;
+            const delay = baseDelay / animationSpeed;
+
+            intervalId = setInterval(() => {
+                if (currentStep < totalSteps) {
+                    currentStep++;
+                    updateStep(currentStep);
+                    updateProgress();
+                    updateDetail(currentStep);
+                    updateWorkers(currentStep);
+
+                    // 更新数值显示
+                    if (currentStep === 2) {
+                        document.getElementById('rewardValue').textContent = (Math.random() * 0.5 + 0.5).toFixed(2);
+                    }
+                    if (currentStep === 4) {
+                        document.getElementById('lossValue').textContent = (Math.random() * 0.3).toFixed(3);
+                    }
+                } else {
+                    // 完成一个epoch
+                    currentEpoch++;
+                    document.getElementById('epochValue').textContent = currentEpoch;
+
+                    // 重置步骤，开始下一轮
+                    resetSteps();
+                    currentStep = 0;
+
+                    if (currentEpoch >= maxEpochs) {
+                        pauseAnimation();
+                        alert('训练完成！共 ' + maxEpochs + ' 个 Epoch');
+                    }
+                }
+            }, delay);
+        }
+
+        // 暂停动画
+        function pauseAnimation() {
+            isRunning = false;
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+
+        // 重置动画
+        function resetAnimation() {
+            pauseAnimation();
+            currentStep = 0;
+            currentEpoch = 0;
+            resetSteps();
+            document.getElementById('epochValue').textContent = '0';
+            document.getElementById('stepValue').textContent = '0';
+            document.getElementById('rewardValue').textContent = '-';
+            document.getElementById('lossValue').textContent = '-';
+            document.getElementById('progressFill').style.width = '0%';
+
+            // 重置详情面板
+            document.getElementById('detailTitle').textContent = 'PPO Training Details';
+            document.getElementById('detailContent').innerHTML = `
+                点击"开始"按钮查看PPO训练流程的动画演示。
+                <br><br>
+                <b>核心公式:</b>
+                <div class="formula-box">
+                    L(θ) = min(r(θ)·A, clip(r(θ), 1-ε, 1+ε)·A)
+                </div>
+                其中 r(θ) = π_new / π_old，A 为优势函数，ε 为clip范围
+            `;
+
+            // 重置worker
+            document.querySelectorAll('.worker-box').forEach(w => w.classList.remove('active'));
+        }
+
+        // 切换速度
+        function toggleSpeed() {
+            if (animationSpeed === 1) {
+                animationSpeed = 2;
+                document.getElementById('speedLabel').textContent = '快速';
+            } else if (animationSpeed === 2) {
+                animationSpeed = 4;
+                document.getElementById('speedLabel').textContent = '极速';
+            } else {
+                animationSpeed = 1;
+                document.getElementById('speedLabel').textContent = '正常';
+            }
+
+            // 如果正在运行，重新启动以应用新速度
+            if (isRunning) {
+                pauseAnimation();
+                startAnimation();
+            }
+        }
+
+        // 更新步骤状态
+        function updateStep(step) {
+            document.getElementById('stepValue').textContent = step;
+
+            // 移除所有active状态，添加completed状态到之前的步骤
+            for (let i = 1; i <= totalSteps; i++) {
+                const stepEl = document.getElementById('step-' + i);
+                stepEl.classList.remove('active');
+                if (i < step) {
+                    stepEl.classList.add('completed');
+                } else {
+                    stepEl.classList.remove('completed');
+                }
+            }
+
+            // 当前步骤设为active
+            document.getElementById('step-' + step).classList.add('active');
+
+            // 添加数据流动画
+            addDataPacket();
+        }
+
+        // 重置步骤状态
+        function resetSteps() {
+            for (let i = 1; i <= totalSteps; i++) {
+                const stepEl = document.getElementById('step-' + i);
+                stepEl.classList.remove('active', 'completed');
+            }
+        }
+
+        // 更新进度条
+        function updateProgress() {
+            const totalProgress = (currentEpoch / maxEpochs) * 100 + (currentStep / totalSteps) * (100 / maxEpochs);
+            document.getElementById('progressFill').style.width = totalProgress + '%';
+        }
+
+        // 更新详情面板
+        function updateDetail(step) {
+            const detail = stepDetails[step];
+            if (detail) {
+                document.getElementById('detailTitle').textContent = detail.title;
+                document.getElementById('detailContent').innerHTML = detail.content;
+            }
+        }
+
+        // 更新Worker状态
+        function updateWorkers(step) {
+            // 先重置所有worker
+            document.querySelectorAll('.worker-box').forEach(w => w.classList.remove('active'));
+
+            // 激活当前步骤涉及的worker
+            const detail = stepDetails[step];
+            if (detail && detail.workers) {
+                detail.workers.forEach(workerId => {
+                    document.getElementById(workerId).classList.add('active');
+                });
+            }
+        }
+
+        // 添加数据流动画效果
+        function addDataPacket() {
+            const flowContainer = document.getElementById('dataFlow');
+            const packet = document.createElement('div');
+            packet.className = 'data-packet';
+            packet.textContent = '📦';
+            packet.style.top = '15px';
+            flowContainer.appendChild(packet);
+
+            // 动画结束后移除
+            setTimeout(() => {
+                packet.remove();
+            }, 2000);
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('PPO Training Animation Ready');
+        });
+    </script>
+</body>
+</html>

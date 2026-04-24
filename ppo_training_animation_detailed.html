@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>verl PPO Training - Source Code Call Chain Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 5px;
+            font-size: 1.8em;
+            color: #00d9ff;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        /* 控制面板 */
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        .btn-play { background: linear-gradient(45deg, #00d9ff, #00ff88); color: #1a1a2e; }
+        .btn-pause { background: linear-gradient(45deg, #ff6b6b, #ffa500); color: #fff; }
+        .btn-reset { background: #444; color: #fff; }
+        .btn-speed { background: #555; color: #00d9ff; }
+
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 3px 15px rgba(0, 217, 255, 0.3);
+        }
+
+        /* 状态栏 */
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            flex-wrap: wrap;
+        }
+
+        .status-item {
+            text-align: center;
+        }
+
+        .status-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #00ff88;
+        }
+
+        .status-label {
+            font-size: 11px;
+            color: #888;
+        }
+
+        /* 进度条 */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            width: 0%;
+            transition: width 0.3s;
+            border-radius: 4px;
+        }
+
+        /* 主布局 */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+        }
+
+        @media (max-width: 1000px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 左侧：流程图 */
+        .flow-section {
+            position: relative;
+        }
+
+        /* Worker架构 */
+        .worker-architecture {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .worker-card {
+            padding: 15px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            text-align: center;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+            position: relative;
+        }
+
+        .worker-card.active {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.15);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.3);
+        }
+
+        .worker-icon {
+            font-size: 30px;
+            margin-bottom: 8px;
+        }
+
+        .worker-name {
+            font-size: 13px;
+            font-weight: bold;
+            color: #00d9ff;
+            margin-bottom: 5px;
+        }
+
+        .worker-file {
+            font-size: 10px;
+            color: #666;
+            background: rgba(0,0,0,0.3);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+
+        .worker-status {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #444;
+        }
+
+        .worker-status.active {
+            background: #00ff88;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+        }
+
+        /* 流程步骤 */
+        .flow-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .flow-step {
+            display: flex;
+            align-items: stretch;
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+            overflow: hidden;
+            transition: all 0.3s;
+            opacity: 0.5;
+        }
+
+        .flow-step.active {
+            opacity: 1;
+            background: rgba(0, 217, 255, 0.1);
+            border-left: 3px solid #00d9ff;
+        }
+
+        .flow-step.completed {
+            opacity: 1;
+            background: rgba(0, 255, 136, 0.08);
+            border-left: 3px solid #00ff88;
+        }
+
+        .step-marker {
+            width: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.2);
+            font-size: 18px;
+        }
+
+        .step-main {
+            flex: 1;
+            padding: 12px;
+        }
+
+        .step-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .step-desc {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .step-code {
+            font-size: 11px;
+            background: rgba(0,0,0,0.3);
+            padding: 5px 8px;
+            border-radius: 5px;
+            margin-top: 8px;
+            font-family: 'Courier New', monospace;
+            color: #aaa;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .step-code .highlight {
+            color: #00ff88;
+        }
+
+        .step-code .file {
+            color: #00d9ff;
+        }
+
+        .step-timing {
+            width: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.2);
+            font-size: 11px;
+            color: #666;
+        }
+
+        /* 数据流可视化 */
+        .data-flow-visual {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            min-height: 100px;
+        }
+
+        .data-flow-title {
+            font-size: 12px;
+            color: #00d9ff;
+            margin-bottom: 10px;
+        }
+
+        .data-pipeline {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            padding: 10px 0;
+        }
+
+        .data-node {
+            padding: 10px 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            font-size: 11px;
+            text-align: center;
+            transition: all 0.3s;
+            opacity: 0.5;
+        }
+
+        .data-node.active {
+            opacity: 1;
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+        }
+
+        .data-node-label {
+            font-weight: bold;
+            color: #00d9ff;
+            margin-bottom: 3px;
+        }
+
+        .data-node-content {
+            color: #888;
+            font-size: 10px;
+        }
+
+        .data-arrow {
+            color: #00d9ff;
+            font-size: 18px;
+            animation: flowArrow 1s infinite;
+        }
+
+        @keyframes flowArrow {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        /* 右侧：代码详情 */
+        .code-detail-section {
+            background: rgba(0,0,0,0.4);
+            border-radius: 15px;
+            padding: 15px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .code-detail-header {
+            font-size: 14px;
+            color: #00d9ff;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(0,217,255,0.3);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .code-block-container {
+            background: #0d0d0d;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+
+        .code-line {
+            display: flex;
+            margin: 2px 0;
+        }
+
+        .code-line.highlight-line {
+            background: rgba(0, 255, 136, 0.1);
+            border-left: 2px solid #00ff88;
+        }
+
+        .code-line-num {
+            width: 30px;
+            color: #666;
+            text-align: right;
+            padding-right: 10px;
+        }
+
+        .code-line-content {
+            flex: 1;
+        }
+
+        .code-keyword { color: #ff79c6; }
+        .code-function { color: #00ff88; }
+        .code-string { color: #f1fa8c; }
+        .code-comment { color: #6272a4; }
+        .code-var { color: #8be9fd; }
+        .code-file { color: #ffb86c; }
+
+        /* 函数调用链 */
+        .call-chain {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+
+        .call-chain-title {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .call-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            padding: 5px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 5px;
+            font-size: 11px;
+        }
+
+        .call-item.active {
+            background: rgba(0, 255, 136, 0.1);
+            border-left: 2px solid #00ff88;
+        }
+
+        .call-depth {
+            width: 20px;
+            color: #666;
+        }
+
+        .call-arrow {
+            color: #00d9ff;
+            margin-right: 5px;
+        }
+
+        .call-func {
+            color: #00ff88;
+            font-family: 'Courier New', monospace;
+        }
+
+        .call-file {
+            color: #ffb86c;
+            font-size: 10px;
+            margin-left: auto;
+        }
+
+        /* 详细说明 */
+        .step-explanation {
+            font-size: 12px;
+            line-height: 1.6;
+            color: #ccc;
+            margin-bottom: 10px;
+        }
+
+        .step-explanation ul {
+            margin-left: 20px;
+        }
+
+        .step-explanation li {
+            margin: 5px 0;
+        }
+
+        /* 公式框 */
+        .formula-box {
+            background: rgba(0, 217, 255, 0.1);
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+            font-family: 'Courier New', monospace;
+            color: #00ff88;
+            font-size: 13px;
+        }
+
+        /* 循环指示 */
+        .loop-indicator {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            background: rgba(255,255,255,0.1);
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        .loop-spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid #00d9ff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 2s linear infinite;
+            margin: auto;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        .loop-text {
+            text-align: center;
+            font-size: 10px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        /* 数据包动画 */
+        .data-packet-animation {
+            position: relative;
+            height: 40px;
+            margin: 10px 0;
+        }
+
+        .moving-packet {
+            position: absolute;
+            padding: 5px 10px;
+            background: linear-gradient(45deg, #00d9ff, #00ff88);
+            border-radius: 5px;
+            font-size: 10px;
+            color: #1a1a2e;
+            font-weight: bold;
+        }
+
+        /* Mini-map */
+        .mini-map {
+            position: fixed;
+            bottom: 15px;
+            right: 15px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 10px;
+        }
+
+        .mini-map-step {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #444;
+            margin: 3px;
+            display: inline-block;
+        }
+
+        .mini-map-step.active {
+            background: #00d9ff;
+        }
+
+        .mini-map-step.completed {
+            background: #00ff88;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>verl PPO Training - Source Code Call Chain</h1>
+        <p class="subtitle">详细展示 verl 源码中的 PPO 训练流程与函数调用链</p>
+
+        <!-- 控制按钮 -->
+        <div class="controls">
+            <button class="btn btn-play" onclick="startAnimation()">▶ 开始</button>
+            <button class="btn btn-pause" onclick="pauseAnimation()">⏸ 暂停</button>
+            <button class="btn btn-reset" onclick="resetAnimation()">↺ 重置</button>
+            <button class="btn btn-speed" onclick="toggleSpeed()">⚡ <span id="speedLabel">1x</span></button>
+            <button class="btn btn-reset" onclick="stepForward()">→ 单步</button>
+        </div>
+
+        <!-- 状态栏 -->
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-value" id="epochValue">0</div>
+                <div class="status-label">Epoch</div>
+            </div>
+            <div class="status-item">
+                <div class="status-value" id="stepValue">-</div>
+                <div class="status-label">当前步骤</div>
+            </div>
+            <div class="status-item">
+                <div class="status-value" id="rewardValue">-</div>
+                <div class="status-label">Reward</div>
+            </div>
+            <div class="status-item">
+                <div class="status-value" id="lossValue">-</div>
+                <div class="status-label">Loss</div>
+            </div>
+            <div class="status-item">
+                <div class="status-value" id="timingValue">-</div>
+                <div class="status-label">耗时</div>
+            </div>
+        </div>
+
+        <!-- 进度条 -->
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <!-- 主布局 -->
+        <div class="main-layout">
+            <!-- 左侧：流程图 -->
+            <div class="flow-section">
+                <!-- Worker架构 -->
+                <div class="worker-architecture">
+                    <div class="worker-card" id="worker-driver">
+                        <div class="worker-status"></div>
+                        <div class="worker-icon">🖥️</div>
+                        <div class="worker-name">Driver Process</div>
+                        <div class="worker-file">ray_trainer.py</div>
+                    </div>
+                    <div class="worker-card" id="worker-actor">
+                        <div class="worker-status"></div>
+                        <div class="worker-icon">🤖</div>
+                        <div class="worker-name">ActorRolloutWorker</div>
+                        <div class="worker-file">fsdp_workers.py:147</div>
+                    </div>
+                    <div class="worker-card" id="worker-critic">
+                        <div class="worker-status"></div>
+                        <div class="worker-icon">📊</div>
+                        <div class="worker-name">CriticWorker</div>
+                        <div class="worker-file">fsdp_workers.py:1313</div>
+                    </div>
+                    <div class="worker-card" id="worker-reward">
+                        <div class="worker-status"></div>
+                        <div class="worker-icon">🎁</div>
+                        <div class="worker-name">RewardModelWorker</div>
+                        <div class="worker-file">fsdp_workers.py</div>
+                    </div>
+                </div>
+
+                <!-- 数据流可视化 -->
+                <div class="data-flow-visual">
+                    <div class="data-flow-title">📦 DataProto 数据流转</div>
+                    <div class="data-pipeline" id="dataPipeline">
+                        <div class="data-node" id="data-prompt">
+                            <div class="data-node-label">prompt</div>
+                            <div class="data-node-content">input_ids</div>
+                        </div>
+                        <div class="data-arrow">→</div>
+                        <div class="data-node" id="data-sequences">
+                            <div class="data-node-label">sequences</div>
+                            <div class="data-node-content">tokens + log_probs</div>
+                        </div>
+                        <div class="data-arrow">→</div>
+                        <div class="data-node" id="data-reward">
+                            <div class="data-node-label">reward</div>
+                            <div class="data-node-content">scores + KL</div>
+                        </div>
+                        <div class="data-arrow">→</div>
+                        <div class="data-node" id="data-advantage">
+                            <div class="data-node-label">advantage</div>
+                            <div class="data-node-content">GAE values</div>
+                        </div>
+                        <div class="data-arrow">→</div>
+                        <div class="data-node" id="data-loss">
+                            <div class="data-node-label">loss</div>
+                            <div class="data-node-content">PPO update</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 流程步骤 -->
+                <div class="flow-steps" id="flowSteps">
+                    <!-- Step 1 -->
+                    <div class="flow-step" id="step-1">
+                        <div class="step-marker">📝</div>
+                        <div class="step-main">
+                            <div class="step-title">1. Generate Rollout</div>
+                            <div class="step-desc">Actor生成response序列，记录log_probs</div>
+                            <div class="step-code">
+                                <span class="file">ray_trainer.py:1378</span>
+                                <span class="highlight">→ async_rollout_manager.generate_sequences()</span>
+                            </div>
+                        </div>
+                        <div class="step-timing" id="timing-1">~2s</div>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="flow-step" id="step-2">
+                        <div class="step-marker">🎁</div>
+                        <div class="step-main">
+                            <div class="step-title">2. Compute Reward</div>
+                            <div class="step-desc">计算Reward Model分数，可选KL penalty</div>
+                            <div class="step-code">
+                                <span class="file">ray_trainer.py:1443</span>
+                                <span class="highlight">→ _compute_reward_colocate()</span>
+                            </div>
+                        </div>
+                        <div class="step-timing" id="timing-2">~0.5s</div>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="flow-step" id="step-3">
+                        <div class="step-marker">📊</div>
+                        <div class="step-main">
+                            <div class="step-title">3. Compute Old Log Prob</div>
+                            <div class="step-desc">计算当前策略的log_prob (用于PPO ratio)</div>
+                            <div class="step-code">
+                                <span class="file">ray_trainer.py:1467</span>
+                                <span class="highlight">→ _compute_old_log_prob()</span>
+                            </div>
+                        </div>
+                        <div class="step-timing" id="timing-3">~0.3s</div>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="flow-step" id="step-4">
+                        <div class="step-marker">📚</div>
+                        <div class="step-main">
+                            <div class="step-title">4. Compute Ref Log Prob (可选)</div>
+                            <div class="step-desc">计算Reference Policy的log_prob (KL惩罚)</div>
+                            <div class="step-code">
+                                <span class="file">ray_trainer.py:1503</span>
+                                <span class="highlight">→ _compute_ref_log_prob()</span>
+                            </div>
+                        </div>
+                        <div class="step-timing" id="timing-4">~0.2s</div>
+                    </div>
+
+                    <!-- Step 5 -->
+                    <div class="flow-step" id="step-5">
+                        <div class="step-marker">📈</div>
+                        <div class="step-main">
+                            <div class="step-title">5. Compute Values</div>
+                            <div class="step-desc">Critic网络计算价值估计</div>
+                            <div class="step-code">
+                                <span class="file">ray_trainer.py:1509</span>
+                                <span class="highlight">→ _compute_values()</span>
+                            </div>
+                        </div>
+                        <div class="step-timing" id="timing-5">~0.2s</div>
+                    </div>
+
+                    <!-- Step 6 -->
+                    <div class="flow-step" id="step-6">
+                        <div class="step-marker">⚡</div>
+                        <div class="step-main">
+                            <div class="step-title">6. Compute Advantage</div>
+                            <div class="step-desc">Driver进程计算GAE优势估计</div>
+                            <div class="step-code">
+                                <span class="file">ray_trainer.py:1550</span>
+                                <span class="highlight">→ compute_advantage()</span> <span class="comment"># core_algos.py</span>
+                            </div>
+                        </div>
+                        <div class="step-timing" id="timing-6">~0.1s</div>
+                    </div>
+
+                    <!-- Step 7 -->
+                    <div class="flow-step" id="step-7">
+                        <div class="step-marker">🔄</div>
+                        <div class="step-main">
+                            <div class="step-title">7. Update Critic</div>
+                            <div class="step-desc">更新Critic网络参数</div>
+                            <div class="step-code">
+                                <span class="file">ray_trainer.py:1562</span>
+                                <span class="highlight">→ _update_critic()</span>
+                            </div>
+                        </div>
+                        <div class="step-timing" id="timing-7">~1s</div>
+                    </div>
+
+                    <!-- Step 8 -->
+                    <div class="flow-step" id="step-8">
+                        <div class="step-marker">🚀</div>
+                        <div class="step-main">
+                            <div class="step-title">8. Update Actor</div>
+                            <div class="step-desc">PPO更新Actor网络参数</div>
+                            <div class="step-code">
+                                <span class="file">ray_trainer.py:1573</span>
+                                <span class="highlight">→ _update_actor()</span>
+                            </div>
+                        </div>
+                        <div class="step-timing" id="timing-8">~2s</div>
+                    </div>
+
+                    <!-- Step 9 -->
+                    <div class="flow-step" id="step-9">
+                        <div class="step-marker">💾</div>
+                        <div class="step-main">
+                            <div class="step-title">9. Save Checkpoint</div>
+                            <div class="step-desc">保存模型检查点</div>
+                            <div class="step-code">
+                                <span class="file">ray_trainer.py:1588</span>
+                                <span class="highlight">→ checkpoint_manager.save()</span>
+                            </div>
+                        </div>
+                        <div class="step-timing" id="timing-9">~0.5s</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：代码详情 -->
+            <div class="code-detail-section">
+                <div class="code-detail-header">
+                    <span id="detailTitle">源码调用链详情</span>
+                    <span id="detailFile" style="color:#ffb86c">-</span>
+                </div>
+
+                <!-- 函数调用链 -->
+                <div class="call-chain" id="callChain">
+                    <div class="call-chain-title">📍 函数调用链</div>
+                    <div id="callChainContent">
+                        <div class="call-item">
+                            <span class="call-depth">0</span>
+                            <span class="call-arrow">→</span>
+                            <span class="call-func">RayPPOTrainer.fit()</span>
+                            <span class="call-file">ray_trainer.py:1290</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤说明 -->
+                <div class="step-explanation" id="stepExplanation">
+                    点击"开始"按钮查看详细的PPO训练流程。
+                </div>
+
+                <!-- 代码块 -->
+                <div class="code-block-container" id="codeBlock">
+                    <div class="code-line">
+                        <span class="code-line-num">#</span>
+                        <span class="code-line-content"><span class="code-comment"># 等待动画开始...</span></span>
+                    </div>
+                </div>
+
+                <!-- 公式 -->
+                <div class="formula-box" id="formulaBox">
+                    PPO: L = min(r(θ)·A, clip(r(θ), 1-ε, 1+ε)·A)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 循环指示器 -->
+    <div class="loop-indicator">
+        <div class="loop-spinner" id="loopSpinner"></div>
+        <div class="loop-text">Training Loop</div>
+    </div>
+
+    <!-- Mini-map -->
+    <div class="mini-map" id="miniMap">
+        <span class="mini-map-step" id="mini-1"></span>
+        <span class="mini-map-step" id="mini-2"></span>
+        <span class="mini-map-step" id="mini-3"></span>
+        <span class="mini-map-step" id="mini-4"></span>
+        <span class="mini-map-step" id="mini-5"></span>
+        <span class="mini-map-step" id="mini-6"></span>
+        <span class="mini-map-step" id="mini-7"></span>
+        <span class="mini-map-step" id="mini-8"></span>
+        <span class="mini-map-step" id="mini-9"></span>
+    </div>
+
+    <script>
+        // 状态变量
+        let isRunning = false;
+        let currentStep = 0;
+        let currentEpoch = 0;
+        let animationSpeed = 1;
+        let intervalId = null;
+        const totalSteps = 9;
+        const maxEpochs = 5;
+
+        // 步骤详情定义（对应源码）
+        const stepDetails = {
+            1: {
+                title: "Generate Rollout",
+                file: "verl/trainer/ppo/ray_trainer.py:1378",
+                callChain: [
+                    { depth: 0, func: "RayPPOTrainer.fit()", file: ":1346" },
+                    { depth: 1, func: "async_rollout_manager.generate_sequences()", file: ":1381" },
+                    { depth: 2, func: "ActorRolloutRefWorker.generate_sequences()", file: "fsdp_workers.py:1075" },
+                    { depth: 3, func: "self.rollout.generate_sequences()", file: ":1097" },
+                    { depth: 4, func: "vllm_rollout / sglang_rollout", file: "rollout/" },
+                ],
+                workers: ["worker-actor"],
+                dataNodes: ["data-prompt", "data-sequences"],
+                explanation: `
+                    <b>Worker:</b> ActorRolloutRefWorker (fsdp_workers.py:147)<br>
+                    <b>输入:</b> DataProto (prompt input_ids)<br>
+                    <b>输出:</b> sequences + old_log_probs + attention_mask<br><br>
+                    <b>过程:</b>
+                    <ul>
+                        <li>切换到Rollout模式 (vLLM/SGLang推理引擎)</li>
+                        <li>批量生成response序列</li>
+                        <li>记录每个token的log_prob</li>
+                        <li>切换回Trainer模式</li>
+                    </ul>
+                `,
+                code: [
+                    { num: 1378, content: '<span class="code-comment"># ray_trainer.py - fit() 训练循环</span>' },
+                    { num: 1378, content: '<span class="code-keyword">with</span> marked_timer(<span class="code-string">"gen"</span>, timing_raw):' },
+                    { num: 1381, content: '    gen_batch_output = <span class="code-function">self.async_rollout_manager.generate_sequences</span>(gen_batch_output)', highlight: true },
+                    { num: '', content: '' },
+                    { num: 1075, content: '<span class="code-comment"># fsdp_workers.py - Worker方法</span>' },
+                    { num: 1075, content: '<span class="code-keyword">@register</span>(dispatch_mode=...)' },
+                    { num: 1097, content: '    output = <span class="code-function">self.rollout.generate_sequences</span>(prompts=prompts)', highlight: true },
+                ],
+                formula: "生成: π_actor(a|s) → sequences + log_probs",
+                timing: "~2s (取决于序列长度)"
+            },
+            2: {
+                title: "Compute Reward",
+                file: "verl/trainer/ppo/ray_trainer.py:1443",
+                callChain: [
+                    { depth: 0, func: "RayPPOTrainer.fit()", file: ":1346" },
+                    { depth: 1, func: "_compute_reward_colocate()", file: ":1446" },
+                    { depth: 2, func: "RewardModelWorker.forward()", file: "fsdp_workers.py" },
+                    { depth: 3, func: "reward_fn.compute_reward()", file: "reward.py" },
+                ],
+                workers: ["worker-reward"],
+                dataNodes: ["data-sequences", "data-reward"],
+                explanation: `
+                    <b>位置:</b> ray_trainer.py:1443<br>
+                    <b>输入:</b> prompt + response<br>
+                    <b>输出:</b> rm_scores / token_level_rewards<br><br>
+                    <b>奖励类型:</b>
+                    <ul>
+                        <li><b>Model-based:</b> Reward Model推理</li>
+                        <li><b>Rule-based:</b> 自定义规则函数</li>
+                        <li><b>KL Penalty:</b> 参考策略KL散度惩罚</li>
+                    </ul>
+                `,
+                code: [
+                    { num: 1443, content: '<span class="code-keyword">with</span> marked_timer(<span class="code-string">"reward"</span>, timing_raw):' },
+                    { num: 1446, content: '    <span class="code-keyword">if</span> self.use_rm:' },
+                    { num: 1447, content: '        batch_reward = <span class="code-function">self._compute_reward_colocate</span>(batch)', highlight: true },
+                    { num: 1448, content: '        batch = batch.union(batch_reward)' },
+                    { num: '', content: '' },
+                    { num: 1450, content: '    reward_tensor, reward_extra_infos_dict = <span class="code-function">extract_reward</span>(batch)', highlight: true },
+                ],
+                formula: "r = r_base - β·KL(π || π_ref)",
+                timing: "~0.5s"
+            },
+            3: {
+                title: "Compute Old Log Prob",
+                file: "verl/trainer/ppo/ray_trainer.py:1467",
+                callChain: [
+                    { depth: 0, func: "RayPPOTrainer.fit()", file: ":1346" },
+                    { depth: 1, func: "_compute_old_log_prob()", file: ":1468" },
+                    { depth: 2, func: "ActorRolloutRefWorker.compute_log_prob()", file: "fsdp_workers.py:1125" },
+                    { depth: 3, func: "actor_module.forward()", file: "" },
+                ],
+                workers: ["worker-actor"],
+                dataNodes: ["data-sequences"],
+                explanation: `
+                    <b>位置:</b> ray_trainer.py:1467<br>
+                    <b>作用:</b> 计算当前策略π_θ的log_prob<br>
+                    <b>用途:</b> 用于PPO的ratio计算: r(θ) = exp(log_prob - old_log_prob)<br><br>
+                    <b>注意:</b> 这里的old_log_prob是重新计算的，与rollout时的log_prob不同<br>
+                    (rollout时模型可能使用了不同的推理引擎)
+                `,
+                code: [
+                    { num: 1467, content: '<span class="code-keyword">with</span> marked_timer(<span class="code-string">"old_log_prob"</span>, timing_raw):' },
+                    { num: 1468, content: '    old_log_prob, old_log_prob_mfu = <span class="code-function">self._compute_old_log_prob</span>(batch)', highlight: true },
+                    { num: 1492, content: '    batch = batch.union(old_log_prob)' },
+                    { num: '', content: '' },
+                    { num: 1125, content: '<span class="code-comment"># fsdp_workers.py</span>' },
+                    { num: 1125, content: '<span class="code-keyword">@register</span>(dispatch_mode=...)' },
+                    { num: '', content: 'def <span class="code-function">compute_log_prob</span>(self, data: DataProto):' },
+                ],
+                formula: "old_log_prob = log π_θ(a|s)",
+                timing: "~0.3s"
+            },
+            4: {
+                title: "Compute Ref Log Prob",
+                file: "verl/trainer/ppo/ray_trainer.py:1503",
+                callChain: [
+                    { depth: 0, func: "RayPPOTrainer.fit()", file: ":1346" },
+                    { depth: 1, func: "_compute_ref_log_prob()", file: ":1504" },
+                    { depth: 2, func: "RefPolicyWorker.compute_log_prob()", file: "fsdp_workers.py" },
+                ],
+                workers: ["worker-actor"],
+                dataNodes: ["data-sequences"],
+                explanation: `
+                    <b>位置:</b> ray_trainer.py:1503<br>
+                    <b>条件:</b> use_kl_in_reward 或 use_kl_loss<br>
+                    <b>作用:</b> 计算Reference Policy π_ref的log_prob<br><br>
+                    <b>用途:</b>
+                    <ul>
+                        <li>KL Penalty: KL(π || π_ref)</li>
+                        <li>KL Loss: 约束策略不偏离太远</li>
+                    </ul>
+                `,
+                code: [
+                    { num: 1501, content: '<span class="code-keyword">if</span> self.use_reference_policy:' },
+                    { num: 1503, content: '    <span class="code-keyword">with</span> marked_timer(<span class="code-string">"RefPolicy"</span>, timing_raw):' },
+                    { num: 1504, content: '        ref_log_prob = <span class="code-function">self._compute_ref_log_prob</span>(batch)', highlight: true },
+                    { num: 1505, content: '        batch = batch.union(ref_log_prob)' },
+                ],
+                formula: "KL = Σ π_θ(a|s) · log(π_θ/π_ref)",
+                timing: "~0.2s (可选)"
+            },
+            5: {
+                title: "Compute Values",
+                file: "verl/trainer/ppo/ray_trainer.py:1509",
+                callChain: [
+                    { depth: 0, func: "RayPPOTrainer.fit()", file: ":1346" },
+                    { depth: 1, func: "_compute_values()", file: ":1510" },
+                    { depth: 2, func: "CriticWorker.compute_values()", file: "fsdp_workers.py" },
+                    { depth: 3, func: "critic_module.forward()", file: "" },
+                ],
+                workers: ["worker-critic"],
+                dataNodes: ["data-sequences", "data-advantage"],
+                explanation: `
+                    <b>Worker:</b> CriticWorker (fsdp_workers.py:1313)<br>
+                    <b>作用:</b> 估计状态价值V(s)<br>
+                    <b>用途:</b> 用于GAE优势估计<br><br>
+                    <b>GAE公式需要:</b>
+                    <ul>
+                        <li>values: 当前状态价值</li>
+                        <li>用于计算: δ = r + γV(s') - V(s)</li>
+                    </ul>
+                `,
+                code: [
+                    { num: 1508, content: '<span class="code-keyword">if</span> self.use_critic:' },
+                    { num: 1509, content: '    <span class="code-keyword">with</span> marked_timer(<span class="code-string">"values"</span>, timing_raw):' },
+                    { num: 1510, content: '        values = <span class="code-function">self._compute_values</span>(batch)', highlight: true },
+                    { num: 1511, content: '        batch = batch.union(values)' },
+                ],
+                formula: "V(s) = CriticNetwork(s)",
+                timing: "~0.2s"
+            },
+            6: {
+                title: "Compute Advantage",
+                file: "verl/trainer/ppo/ray_trainer.py:1550",
+                callChain: [
+                    { depth: 0, func: "RayPPOTrainer.fit()", file: ":1346" },
+                    { depth: 1, func: "compute_advantage()", file: ":1550" },
+                    { depth: 2, func: "adv_estimator_fn()", file: "core_algos.py" },
+                    { depth: 3, func: "compute_gae_advantage()", file: "core_algos.py" },
+                ],
+                workers: ["worker-driver"],
+                dataNodes: ["data-reward", "data-advantage"],
+                explanation: `
+                    <b>位置:</b> core_algos.py (Driver进程执行)<br>
+                    <b>输入:</b> rewards, values, gamma, lambda<br>
+                    <b>输出:</b> advantages, returns<br><br>
+                    <b>GAE公式:</b>
+                    <ul>
+                        <li>δ_t = r_t + γV(s_{t+1}) - V(s_t)</li>
+                        <li>A_t = Σ_{l=0} (γλ)^l · δ_{t+l}</li>
+                    </ul>
+                `,
+                code: [
+                    { num: 1550, content: 'batch = <span class="code-function">compute_advantage</span>(' },
+                    { num: 1551, content: '    batch,' },
+                    { num: 1552, content: '    adv_estimator=self.config.algorithm.adv_estimator,' },
+                    { num: 1553, content: '    gamma=self.config.algorithm.gamma,' },
+                    { num: 1554, content: '    lam=self.config.algorithm.lam,', highlight: true },
+                    { num: '', content: ')' },
+                ],
+                formula: "A_t = Σ (γλ)^l · (r_l + γV(s_{l+1}) - V(s_l))",
+                timing: "~0.1s (Driver CPU)"
+            },
+            7: {
+                title: "Update Critic",
+                file: "verl/trainer/ppo/ray_trainer.py:1562",
+                callChain: [
+                    { depth: 0, func: "RayPPOTrainer.fit()", file: ":1346" },
+                    { depth: 1, func: "_update_critic()", file: ":1563" },
+                    { depth: 2, func: "CriticWorker.update_critic()", file: "fsdp_workers.py:1698" },
+                    { depth: 3, func: "critic.update_policy()", file: "" },
+                ],
+                workers: ["worker-critic"],
+                dataNodes: ["data-loss"],
+                explanation: `
+                    <b>Worker:</b> CriticWorker<br>
+                    <b>损失:</b> MSE(V, returns)<br>
+                    <b>迭代:</b> ppo_epochs次 mini-batch更新<br><br>
+                    <b>目标:</b> 让Critic准确估计returns
+                `,
+                code: [
+                    { num: 1561, content: '<span class="code-keyword">if</span> self.use_critic:' },
+                    { num: 1562, content: '    <span class="code-keyword">with</span> marked_timer(<span class="code-string">"update_critic"</span>, timing_raw):' },
+                    { num: 1563, content: '        critic_output = <span class="code-function">self._update_critic</span>(batch)', highlight: true },
+                    { num: '', content: '' },
+                    { num: 1698, content: '<span class="code-comment"># fsdp_workers.py - CriticWorker</span>' },
+                    { num: 1698, content: 'def <span class="code-function">update_critic</span>(self, data: DataProto):' },
+                ],
+                formula: "L_critic = MSE(V(s), returns)",
+                timing: "~1s"
+            },
+            8: {
+                title: "Update Actor (PPO)",
+                file: "verl/trainer/ppo/ray_trainer.py:1573",
+                callChain: [
+                    { depth: 0, func: "RayPPOTrainer.fit()", file: ":1346" },
+                    { depth: 1, func: "_update_actor()", file: ":1574" },
+                    { depth: 2, func: "ActorRolloutRefWorker.update_actor()", file: "fsdp_workers.py:1029" },
+                    { depth: 3, func: "actor.update_policy()", file: "" },
+                    { depth: 4, func: "ppo_policy_loss()", file: "core_algos.py" },
+                ],
+                workers: ["worker-actor"],
+                dataNodes: ["data-loss"],
+                explanation: `
+                    <b>Worker:</b> ActorRolloutRefWorker<br>
+                    <b>损失:</b> PPO clipped objective<br>
+                    <b>迭代:</b> ppo_epochs次 mini-batch更新<br><br>
+                    <b>PPO公式:</b>
+                    <ul>
+                        <li>ratio = exp(log_prob - old_log_prob)</li>
+                        <li>clipped = clip(ratio, 1-ε, 1+ε)</li>
+                        <li>loss = -min(ratio·A, clipped·A)</li>
+                    </ul>
+                `,
+                code: [
+                    { num: 1573, content: '<span class="code-keyword">with</span> marked_timer(<span class="code-string">"update_actor"</span>, timing_raw):' },
+                    { num: 1574, content: '    actor_output = <span class="code-function">self._update_actor</span>(batch)', highlight: true },
+                    { num: '', content: '' },
+                    { num: 1029, content: '<span class="code-comment"># fsdp_workers.py - ActorRolloutRefWorker</span>' },
+                    { num: 1029, content: 'def <span class="code-function">update_actor</span>(self, data: DataProto):' },
+                    { num: 1041, content: '    metrics = <span class="code-function">self.actor.update_policy</span>(data=data)', highlight: true },
+                ],
+                formula: "L = -min(r(θ)·A, clip(r(θ),1-ε,1+ε)·A)",
+                timing: "~2s"
+            },
+            9: {
+                title: "Save Checkpoint",
+                file: "verl/trainer/ppo/ray_trainer.py:1588",
+                callChain: [
+                    { depth: 0, func: "RayPPOTrainer.fit()", file: ":1346" },
+                    { depth: 1, func: "checkpoint_manager.save()", file: ":1588" },
+                    { depth: 2, func: "FSDPCheckpointManager.save()", file: "checkpoint/" },
+                ],
+                workers: ["worker-driver"],
+                dataNodes: [],
+                explanation: `
+                    <b>保存内容:</b>
+                    <ul>
+                        <li>Actor模型参数</li>
+                        <li>Critic模型参数</li>
+                        <li>优化器状态</li>
+                        <li>训练步数</li>
+                    </ul>
+                    <b>策略:</b> 每save_freq步保存一次
+                `,
+                code: [
+                    { num: 1588, content: '<span class="code-keyword">if</span> self.config.trainer.save_freq > 0 <span class="code-keyword">and</span> (...):' },
+                    { num: '', content: '    <span class="code-function">self.checkpoint_manager.save_checkpoint</span>(' },
+                    { num: '', content: '        self.global_steps' },
+                    { num: '', content: '    )' },
+                ],
+                formula: "checkpoint = {actor, critic, optimizer, step}",
+                timing: "~0.5s"
+            }
+        };
+
+        // 启动动画
+        function startAnimation() {
+            if (isRunning) return;
+            isRunning = true;
+            runStep();
+        }
+
+        function runStep() {
+            if (!isRunning) return;
+
+            const baseDelay = 1500;
+            const delay = baseDelay / animationSpeed;
+
+            setTimeout(() => {
+                if (!isRunning) return;
+
+                if (currentStep < totalSteps) {
+                    currentStep++;
+                    updateStep(currentStep);
+                } else {
+                    // 完成一个epoch
+                    currentEpoch++;
+                    document.getElementById('epochValue').textContent = currentEpoch;
+                    resetSteps();
+                    currentStep = 0;
+
+                    if (currentEpoch >= maxEpochs) {
+                        pauseAnimation();
+                        alert('训练完成！共 ' + maxEpochs + ' 个 Epoch');
+                        return;
+                    }
+                }
+                runStep();
+            }, delay);
+        }
+
+        function stepForward() {
+            pauseAnimation();
+            if (currentStep < totalSteps) {
+                currentStep++;
+                updateStep(currentStep);
+            } else {
+                currentEpoch++;
+                document.getElementById('epochValue').textContent = currentEpoch;
+                resetSteps();
+                currentStep = 0;
+            }
+        }
+
+        function pauseAnimation() {
+            isRunning = false;
+        }
+
+        function resetAnimation() {
+            pauseAnimation();
+            currentStep = 0;
+            currentEpoch = 0;
+            resetSteps();
+            resetDetail();
+        }
+
+        function toggleSpeed() {
+            if (animationSpeed === 1) {
+                animationSpeed = 2;
+            } else if (animationSpeed === 2) {
+                animationSpeed = 4;
+            } else {
+                animationSpeed = 1;
+            }
+            document.getElementById('speedLabel').textContent = animationSpeed + 'x';
+        }
+
+        function resetSteps() {
+            for (let i = 1; i <= totalSteps; i++) {
+                document.getElementById('step-' + i).classList.remove('active', 'completed');
+                document.getElementById('mini-' + i).classList.remove('active', 'completed');
+            }
+            document.querySelectorAll('.worker-card').forEach(w => w.classList.remove('active'));
+            document.querySelectorAll('.worker-status').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.data-node').forEach(n => n.classList.remove('active'));
+
+            document.getElementById('stepValue').textContent = '-';
+            document.getElementById('rewardValue').textContent = '-';
+            document.getElementById('lossValue').textContent = '-';
+            document.getElementById('timingValue').textContent = '-';
+            document.getElementById('progressFill').style.width = '0%';
+        }
+
+        function resetDetail() {
+            document.getElementById('detailTitle').textContent = '源码调用链详情';
+            document.getElementById('detailFile').textContent = '-';
+            document.getElementById('callChainContent').innerHTML = `
+                <div class="call-item">
+                    <span class="call-depth">0</span>
+                    <span class="call-arrow">→</span>
+                    <span class="call-func">RayPPOTrainer.fit()</span>
+                    <span class="call-file">ray_trainer.py:1290</span>
+                </div>
+            `;
+            document.getElementById('stepExplanation').textContent = '点击"开始"按钮查看详细的PPO训练流程。';
+            document.getElementById('codeBlock').innerHTML = `
+                <div class="code-line">
+                    <span class="code-line-num">#</span>
+                    <span class="code-line-content"><span class="code-comment"># 等待动画开始...</span></span>
+                </div>
+            `;
+            document.getElementById('formulaBox').textContent = 'PPO: L = min(r(θ)·A, clip(r(θ), 1-ε, 1+ε)·A)';
+        }
+
+        function updateStep(step) {
+            const detail = stepDetails[step];
+
+            // 更新步骤状态
+            document.getElementById('stepValue').textContent = step;
+            for (let i = 1; i <= totalSteps; i++) {
+                const stepEl = document.getElementById('step-' + i);
+                const miniEl = document.getElementById('mini-' + i);
+                stepEl.classList.remove('active');
+                miniEl.classList.remove('active');
+                if (i < step) {
+                    stepEl.classList.add('completed');
+                    miniEl.classList.add('completed');
+                }
+            }
+            document.getElementById('step-' + step).classList.add('active');
+            document.getElementById('mini-' + step).classList.add('active');
+
+            // 更新Worker状态
+            document.querySelectorAll('.worker-card').forEach(w => w.classList.remove('active'));
+            document.querySelectorAll('.worker-status').forEach(s => s.classList.remove('active'));
+            detail.workers.forEach(workerId => {
+                const card = document.getElementById(workerId);
+                card.classList.add('active');
+                card.querySelector('.worker-status').classList.add('active');
+            });
+
+            // 更新数据流
+            document.querySelectorAll('.data-node').forEach(n => n.classList.remove('active'));
+            detail.dataNodes.forEach(nodeId => {
+                document.getElementById(nodeId).classList.add('active');
+            });
+
+            // 更新详情面板
+            document.getElementById('detailTitle').textContent = detail.title;
+            document.getElementById('detailFile').textContent = detail.file;
+
+            // 更新调用链
+            let callChainHtml = '';
+            detail.callChain.forEach(call => {
+                const activeClass = call.depth === 1 ? 'active' : '';
+                callChainHtml += `
+                    <div class="call-item ${activeClass}">
+                        <span class="call-depth">${call.depth}</span>
+                        <span class="call-arrow">→</span>
+                        <span class="call-func">${call.func}</span>
+                        <span class="call-file">${call.file}</span>
+                    </div>
+                `;
+            });
+            document.getElementById('callChainContent').innerHTML = callChainHtml;
+
+            // 更新说明
+            document.getElementById('stepExplanation').innerHTML = detail.explanation;
+
+            // 更新代码
+            let codeHtml = '';
+            detail.code.forEach(line => {
+                const highlightClass = line.highlight ? 'highlight-line' : '';
+                codeHtml += `
+                    <div class="code-line ${highlightClass}">
+                        <span class="code-line-num">${line.num}</span>
+                        <span class="code-line-content">${line.content}</span>
+                    </div>
+                `;
+            });
+            document.getElementById('codeBlock').innerHTML = codeHtml;
+
+            // 更新公式
+            document.getElementById('formulaBox').textContent = detail.formula;
+
+            // 更新数值
+            if (step === 2) {
+                document.getElementById('rewardValue').textContent = (Math.random() * 0.5 + 0.3).toFixed(2);
+            }
+            if (step === 8) {
+                document.getElementById('lossValue').textContent = (Math.random() * 0.2 + 0.1).toFixed(3);
+            }
+            document.getElementById('timingValue').textContent = detail.timing;
+
+            // 更新进度
+            const progress = (currentEpoch / maxEpochs) * 100 + (step / totalSteps) * (100 / maxEpochs);
+            document.getElementById('progressFill').style.width = progress + '%';
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('PPO Source Code Animation Ready');
+        });
+    </script>
+</body>
+</html>
