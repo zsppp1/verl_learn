@@ -31,6 +31,7 @@ verl_learn/
 ├── dapo/                            # DAPO 算法解析
 │   ├── dapo_integration_walkthrough.md
 │   └── dapo_fit_walkthrough.md
+├── technical_concepts_walkthrough.md # 技术概念速查
 └── README.md
 ```
 
@@ -103,6 +104,14 @@ verl_learn/
 |------|------|
 | `dapo_integration_walkthrough.md` | main_dapo.py、dapo_ray_trainer.py 解析，继承 RayPPOTrainer，动态采样实现 |
 | `dapo_fit_walkthrough.md` | RayDAPOTrainer.fit() 详细流程，动态采样循环，与 PPO 对比 |
+
+### 7. 技术概念速查
+
+常见技术概念和配置项的简要说明：
+
+| 文件 | 内容 |
+|------|------|
+| `technical_concepts_walkthrough.md` | RayResourcePool、AgentLoopManager、non_tensor_batch、uid、ground_truth、_get_gen_batch、size_divisor、pad/unpad 等概念速查 |
 
 ## 推荐阅读顺序
 
