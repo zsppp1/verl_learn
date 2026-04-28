@@ -28,6 +28,8 @@ verl_learn/
 │   ├── fit_walkthrough.md
 │   ├── compute_methods_walkthrough.md
 │   └── checkpoint_validate_walkthrough.md
+├── dapo/                            # DAPO 算法解析
+│   └── dapo_integration_walkthrough.md
 └── README.md
 ```
 
@@ -92,6 +94,14 @@ verl_learn/
 | `compute_methods_walkthrough.md` | _compute_values, _update_actor 等计算方法 |
 | `checkpoint_validate_walkthrough.md` | checkpoint 保存/加载，验证评估 |
 
+### 6. DAPO 算法解析
+
+详细解析 DAPO 算法如何对接 verl 框架，位于 `dapo/` 目录：
+
+| 文件 | 内容 |
+|------|------|
+| `dapo_integration_walkthrough.md` | main_dapo.py、dapo_ray_trainer.py 解析，继承 RayPPOTrainer，动态采样实现 |
+
 ## 推荐阅读顺序
 
 ### 快速入门
@@ -120,6 +130,10 @@ verl_learn/
 13. `ray_trainer/helper_functions_walkthrough.md` - Advantage 计算
 14. 其他 `ray_trainer/*.md` 文件
 
+### 算法扩展 (DAPO)
+
+15. `dapo/dapo_integration_walkthrough.md` - DAPO 如何对接 verl
+
 ## 核心概念索引
 
 | 概念 | 说明 | 相关文档 |
@@ -132,9 +146,22 @@ verl_learn/
 | GAE | Generalized Advantage Estimation | `helper_functions_walkthrough.md` |
 | KL Penalty | KL 散度惩罚约束 | `helper_functions_walkthrough.md` |
 | PPO Clip | 策略更新裁剪 | `fit_walkthrough.md` |
+| DAPO 动态采样 | 过滤全对/全错样本重新采样 | `dapo_integration_walkthrough.md` |
+| RayDAPOTrainer | 继承 RayPPOTrainer 实现 DAPO | `dapo_integration_walkthrough.md` |
+
+## 算法对比
+
+| 算法 | 特点 | verl 配置 |
+|------|------|-----------|
+| PPO | 标准 PPO，需要 Critic | `adv_estimator: gae` |
+| GRPO | 不需要 Critic，Group 相对优势 | `adv_estimator: grpo` |
+| GSPO | 序列级别裁剪 | `policy_loss.loss_mode: gspo` |
+| DAPO | 不对称裁剪 + 动态采样 + 超长惩罚 | `clip_ratio_low/clip_ratio_high` + `filter_groups` |
 
 ## 相关链接
 
 - [verl GitHub](https://github.com/verl-project/verl)
+- [verl-recipe GitHub](https://github.com/verl-project/verl-recipe)
 - [HybridFlow Paper (arxiv)](https://arxiv.org/abs/2409.19256)
+- [DAPO Paper (arxiv)](https://arxiv.org/abs/2503.14476)
 - [DeepWiki verl 文档](https://deepwiki.com/verl-project/verl)
