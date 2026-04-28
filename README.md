@@ -29,7 +29,8 @@ verl_learn/
 │   ├── compute_methods_walkthrough.md
 │   └── checkpoint_validate_walkthrough.md
 ├── dapo/                            # DAPO 算法解析
-│   └── dapo_integration_walkthrough.md
+│   ├── dapo_integration_walkthrough.md
+│   └── dapo_fit_walkthrough.md
 └── README.md
 ```
 
@@ -101,6 +102,7 @@ verl_learn/
 | 文件 | 内容 |
 |------|------|
 | `dapo_integration_walkthrough.md` | main_dapo.py、dapo_ray_trainer.py 解析，继承 RayPPOTrainer，动态采样实现 |
+| `dapo_fit_walkthrough.md` | RayDAPOTrainer.fit() 详细流程，动态采样循环，与 PPO 对比 |
 
 ## 推荐阅读顺序
 
